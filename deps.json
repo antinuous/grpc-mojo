@@ -8,10 +8,10 @@
       "commit": "a41f9f67c2e843e5c23de4313de6d0ff97e11a50"
     },
     "mojo-http2": {
-      "commit": "767d656333e0c6cab10899f5eeb1d36a05b7cdaa"
+      "commit": "5b7b65ddd7186d0189e34992b61c1b67e01a8ad7"
     },
     "mojo-tls": {
-      "commit": "62e2571e920cfff5f8b0d06be9ccbc2e9f71f5c1"
+      "commit": "4b18f43ac05825eef7f6e40cdb35c1f527db5396"
     }
   }
 }
