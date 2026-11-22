@@ -8,7 +8,7 @@
       "commit": "8d83b0b0922c0b1edd1065cfc9c87946919b4219"
     },
     "mojo-http2": {
-      "commit": "73faff8569c169b461fa2faa6b4b7810971923fd"
+      "commit": "767d656333e0c6cab10899f5eeb1d36a05b7cdaa"
     },
     "mojo-tls": {
       "commit": "0d3f5260fb0a0d138fae655b7ae910ed63cf6ea4"
