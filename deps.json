@@ -2,7 +2,7 @@
   "dir": "packages",
   "deps": {
     "mojo-net": {
-      "commit": "47303d0baa5e2155b4b73ee1f8c287ed45dc0ab9"
+      "commit": "3b9480a173f87157900c9025eaea8c7d107ad1c3"
     },
     "protomojo": {
       "commit": "8d83b0b0922c0b1edd1065cfc9c87946919b4219"
