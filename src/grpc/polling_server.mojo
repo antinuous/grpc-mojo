@@ -1332,7 +1332,7 @@ struct PollingServer(Movable):
                     return
             else:
                 var handler = self.routes[connection.ctx.path].handler
-                payload = handler(connection.request^, connection.ctx)
+                payload = handler(connection.request, connection.ctx)
                 if connection.ctx.stop_server:
                     self._stop_requested = True
                 if connection.ctx.abort_status:
