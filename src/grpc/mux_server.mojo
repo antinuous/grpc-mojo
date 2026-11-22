@@ -55,16 +55,27 @@ struct MuxServerConfig(Copyable, Movable):
     """Bounds for `MuxServer`. Every queue it owns has a limit here."""
 
     var max_connections: Int
+    """Open connections, counting TLS handshakes in progress."""
     var max_streams_per_connection: Int
+    """Concurrent streams one connection may open."""
     var max_message_bytes: Int
+    """Largest gRPC message accepted or sent."""
     var initial_window_bytes: UInt32
+    """HTTP/2 initial stream window advertised to clients."""
     var max_h2_output_bytes: Int
+    """HTTP/2 frames queued per connection before the socket takes them."""
     var max_socket_output_bytes: Int
+    """Bytes queued per connection for its socket."""
     var max_call_backlog_bytes: Int
+    """Response bytes one call may hold before it is pumped again."""
     var max_read_bytes_per_event: Int
+    """Bytes read from one connection per readiness event."""
     var idle_timeout_ms: Int
+    """Milliseconds a connection may stay idle before it is closed."""
     var tls_handshake_timeout_ms: Int
+    """Milliseconds a TLS handshake may take before it is dropped."""
     var max_accepts_per_event: Int
+    """Connections accepted per listener readiness event."""
 
     def __init__(
         out self,
@@ -81,6 +92,21 @@ struct MuxServerConfig(Copyable, Movable):
         tls_handshake_timeout_ms: Int = 10_000,
         max_accepts_per_event: Int = 32,
     ):
+        """Sets every bound; each argument sets the field of its name.
+
+        Args:
+            max_connections: Open connections, counting handshakes.
+            max_streams_per_connection: Concurrent streams per connection.
+            max_message_bytes: Largest gRPC message accepted or sent.
+            initial_window_bytes: HTTP/2 initial stream window.
+            max_h2_output_bytes: HTTP/2 frames queued per connection.
+            max_socket_output_bytes: Bytes queued per connection socket.
+            max_call_backlog_bytes: Response bytes one call may hold.
+            max_read_bytes_per_event: Bytes read per readiness event.
+            idle_timeout_ms: Idle time before a connection closes.
+            tls_handshake_timeout_ms: Time a TLS handshake may take.
+            max_accepts_per_event: Accepts per listener event.
+        """
         self.max_connections = max_connections
         self.max_streams_per_connection = max_streams_per_connection
         self.max_message_bytes = max_message_bytes
@@ -94,6 +120,11 @@ struct MuxServerConfig(Copyable, Movable):
         self.max_accepts_per_event = max_accepts_per_event
 
     def validate(self) raises:
+        """Checks every bound is in range.
+
+        Raises:
+            Error: When a bound is out of range.
+        """
         if self.max_connections <= 0 or self.max_streams_per_connection <= 0:
             raise Error(
                 "grpc: mux connection and stream limits must be positive"
@@ -120,24 +151,48 @@ struct MuxOutput(Movable):
     status. `room_bytes` is the backlog space left for this pump."""
 
     var messages: List[List[Byte]]
+    """Messages to send, in order."""
     var bytes: Int
+    """Framed size of `messages`."""
     var room_bytes: Int
+    """Backlog space this pump may fill."""
     var status: Optional[Status]
+    """The final status, which ends the call once its messages are sent."""
 
     def __init__(out self, room_bytes: Int):
+        """An empty output.
+
+        Args:
+            room_bytes: Backlog space this pump may fill.
+        """
         self.messages = List[List[Byte]]()
         self.bytes = 0
         self.room_bytes = room_bytes
         self.status = None
 
     def room(self) -> Int:
+        """Backlog space left.
+
+        Returns:
+            Bytes still available to `send`.
+        """
         return self.room_bytes - self.bytes
 
     def send(mut self, var message: List[Byte]):
+        """Queues one message.
+
+        Args:
+            message: The message bytes, without the gRPC prefix.
+        """
         self.bytes += len(message) + GRPC_MESSAGE_PREFIX_LEN
         self.messages.append(message^)
 
     def finish(mut self, var status: Status):
+        """Ends the call with `status` after the queued messages.
+
+        Args:
+            status: The final status.
+        """
         self.status = status^
 
 
@@ -156,27 +211,95 @@ trait MuxService(Deinitable, Movable):
         headers: List[HeaderField],
         now_ns: Int64,
     ) raises -> Optional[Status]:
+        """A call opened.
+
+        Args:
+            call: The call's id.
+            path: The request `:path`.
+            headers: The request headers.
+            now_ns: Monotonic time.
+
+        Returns:
+            A status to finish the call at once, or None to accept it.
+
+        Raises:
+            Error: When the service fails; the call ends with an error.
+        """
         ...
 
     def on_message(
         mut self, call: UInt64, message: List[Byte], now_ns: Int64
     ) raises -> Optional[Status]:
+        """One request message arrived.
+
+        Args:
+            call: The call's id.
+            message: The message bytes, without the gRPC prefix.
+            now_ns: Monotonic time.
+
+        Returns:
+            A status to finish the call, or None to continue it.
+
+        Raises:
+            Error: When the service fails; the call ends with an error.
+        """
         ...
 
     def on_half_close(mut self, call: UInt64, now_ns: Int64) raises:
+        """The client sent its last message.
+
+        Args:
+            call: The call's id.
+            now_ns: Monotonic time.
+
+        Raises:
+            Error: When the service fails; the call ends with an error.
+        """
         ...
 
     def on_end(mut self, call: UInt64, cancelled: Bool, now_ns: Int64):
+        """The call ended; it is never pumped again.
+
+        Args:
+            call: The call's id.
+            cancelled: True when the client or the server reset it.
+            now_ns: Monotonic time.
+        """
         ...
 
     def pump(mut self, call: UInt64, mut out: MuxOutput, now_ns: Int64) raises:
+        """Produces the call's next messages or its final status.
+
+        Args:
+            call: The call's id.
+            out: Where to queue messages and the status.
+            now_ns: Monotonic time.
+
+        Raises:
+            Error: When the service fails; the call ends with an error.
+        """
         ...
 
     def tick(mut self, now_ns: Int64) raises:
+        """Runs once per server step, before any call is driven.
+
+        Args:
+            now_ns: Monotonic time.
+
+        Raises:
+            Error: When the service fails; the server stops.
+        """
         ...
 
     def next_wake_ns(self, now_ns: Int64) -> Int64:
-        """Absolute monotonic time of the next timer, or -1 for none."""
+        """The next timer.
+
+        Args:
+            now_ns: Monotonic time.
+
+        Returns:
+            Absolute monotonic time of the next timer, or -1 for none.
+        """
         ...
 
 
@@ -319,12 +442,20 @@ def _remaining_ms(deadline_ns: Int64, now_ns: Int64) -> Int:
 
 
 struct MuxServer[S: MuxService](Movable):
-    """Serves one `MuxService` on a TCP listener, TLS or h2c."""
+    """Serves one `MuxService` on a TCP listener, TLS or h2c.
+
+    Parameters:
+        S: The service type.
+    """
 
     var service: Self.S
+    """The application state machine."""
     var config: MuxServerConfig
+    """The server's bounds."""
     var listener: TCPListener
+    """The bound listener."""
     var port: UInt16
+    """The bound port."""
     var _tls: Optional[TLSContext]
     var _connections: List[_MuxConnection]
     var _handshakes: List[TLSHandshake]
@@ -341,7 +472,19 @@ struct MuxServer[S: MuxService](Movable):
         cert_chain_pem: StringSpan = "",
         key_pem: StringSpan = "",
     ) raises:
-        """Binds the listener; `port` reports the bound port."""
+        """Binds the listener; `port` reports the bound port.
+
+        Args:
+            service: The application state machine.
+            host: The address to bind.
+            port: The port to bind, or 0 for any.
+            config: The server's bounds.
+            cert_chain_pem: PEM certificate chain path; empty serves h2c.
+            key_pem: PEM private key path.
+
+        Raises:
+            Error: When a bound is out of range or the listener cannot bind.
+        """
         config.validate()
         _ = external_call["signal", Int](_SIGPIPE, _SIG_IGN)
         self.service = service^
@@ -360,6 +503,11 @@ struct MuxServer[S: MuxService](Movable):
         self._next_call = 1
 
     def serve(mut self) raises:
+        """Runs `step` until an error ends it.
+
+        Raises:
+            Error: When the service or the poller fails.
+        """
         var poller = Poller()
         poller.register(
             self.listener.descriptor(), readable=True, writable=False
@@ -368,6 +516,15 @@ struct MuxServer[S: MuxService](Movable):
             self.step(poller)
 
     def step(mut self, mut poller: Poller) raises:
+        """Ticks the service, drives every call, then waits for and handles
+        one batch of readiness events.
+
+        Args:
+            poller: The poller the listener is registered on.
+
+        Raises:
+            Error: When the service or the poller fails.
+        """
         var now = Int64(monotonic())
         self.service.tick(now)
         self._drive_all(poller, now)

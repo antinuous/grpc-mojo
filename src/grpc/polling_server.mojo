@@ -373,7 +373,14 @@ struct _PollingRoute(Copyable, Movable):
 
 def accepts_alpn(selected: String) -> Bool:
     """Accepts `h2` or no ALPN; the server context offers only `h2`, so an
-    empty selection means the client sent no ALPN extension."""
+    empty selection means the client sent no ALPN extension.
+
+    Args:
+        selected: The ALPN protocol the handshake selected.
+
+    Returns:
+        True when the connection may carry gRPC.
+    """
     return selected == H2_ALPN or selected.byte_length() == 0
 
 
