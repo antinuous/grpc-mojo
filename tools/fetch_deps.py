@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """Fetch source dependencies for a standalone checkout.
 
-The grpc-mojo family is five repositories. Until conda packages are the
-default, dependents clone pinned tags from deps.json into a gitignored
-directory (grpc-mojo uses packages/<name>; mojo-http2 and mojo-tls use
-.deps/<name>) so include paths keep working.
+Each dependency is the antinuous mirror at the commit research pins, named
+in deps.json, so this repository's CI tests what research builds. It is
+fetched into a gitignored directory (packages/<name> here; mojo-http2 and
+mojo-tls use .deps/<name>) so include paths keep working.
 
 Already-present directories are left untouched, so a local clone wins over
 a fresh fetch. Use --update to check out previously fetched clones at
-their pinned ref.
+their pinned commit.
 
 URL selection: $GIT_URL_TEMPLATE (default
-"https://github.com/nsalerni/{name}.git").
+"https://github.com/antinuous/{name}.git").
 """
 
 import json
@@ -21,7 +21,22 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_TEMPLATE = "https://github.com/nsalerni/{name}.git"
+DEFAULT_TEMPLATE = "https://github.com/antinuous/{name}.git"
+
+
+def checkout(dest: Path, url: str, commit: str) -> None:
+    """A shallow fetch of one commit by its id, which GitHub serves."""
+    if not dest.exists():
+        subprocess.run(["git", "init", "-q", str(dest)], check=True)
+        subprocess.run(["git", "-C", str(dest), "remote", "add", "origin", url], check=True)
+    subprocess.run(
+        ["git", "-C", str(dest), "fetch", "-q", "--depth", "1", "origin", commit],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(dest), "checkout", "-q", "--detach", "FETCH_HEAD"],
+        check=True,
+    )
 
 
 def main() -> int:
@@ -37,34 +52,13 @@ def main() -> int:
 
     for name, dep in spec["deps"].items():
         dest = dest_root / name
-        ref = dep.get("ref", "main")
-        if dest.exists():
-            if not update:
-                print(f"  {name}: already present at {dest} (skipped)")
-                continue
-            subprocess.run(
-                ["git", "-C", str(dest), "fetch", "--depth", "1", "origin", ref],
-                check=True,
-            )
-            # Shallow clones store a newly fetched tag in FETCH_HEAD without
-            # always creating refs/tags/<ref>, so check out FETCH_HEAD.
-            checkout = subprocess.run(
-                ["git", "-C", str(dest), "checkout", "--detach", "FETCH_HEAD"],
-            )
-            if checkout.returncode != 0:
-                print(
-                    f"  {name}: failed to check out {ref}",
-                    file=sys.stderr,
-                )
-                return 1
-            print(f"  {name}: updated to {ref}")
+        commit = dep["commit"]
+        if dest.exists() and not update:
+            print(f"  {name}: already present at {dest} (skipped)")
             continue
         url = dep.get("url") or template.format(name=name)
-        print(f"  {name}: cloning {url} @ {ref}")
-        subprocess.run(
-            ["git", "clone", "--depth", "1", "--branch", ref, url, str(dest)],
-            check=True,
-        )
+        print(f"  {name}: {url} @ {commit}")
+        checkout(dest, url, commit)
     return 0
 
 

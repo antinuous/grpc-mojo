@@ -2,16 +2,16 @@
   "dir": "packages",
   "deps": {
     "mojo-net": {
-      "ref": "v0.2.8"
+      "commit": "47303d0baa5e2155b4b73ee1f8c287ed45dc0ab9"
     },
     "protomojo": {
-      "ref": "v0.4.4"
+      "commit": "8d83b0b0922c0b1edd1065cfc9c87946919b4219"
     },
     "mojo-http2": {
-      "ref": "v0.2.10"
+      "commit": "73faff8569c169b461fa2faa6b4b7810971923fd"
     },
     "mojo-tls": {
-      "ref": "v0.3.4"
+      "commit": "57f34aa274d123382ae51f26f44a4cf144c48db6"
     }
   }
 }
