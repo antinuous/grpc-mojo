@@ -7,6 +7,7 @@ package's tests run against that package's include set only, matching the
 sibling repositories checked out into packages/.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -72,7 +73,17 @@ def includes_for(suite: str) -> list[str]:
     return out
 
 
+def check_shims() -> None:
+    """The libraries load their shims only from these variables, which pixi's
+    activation sets to the files prepare-tls and prepare-stop write."""
+    for var in ("GRPC_STOP_SHIM", "MOJO_TLS_SHIM"):
+        shim = Path(os.environ.get(var, ""))
+        if not shim.is_file():
+            sys.exit(f"{var} names no built shim: '{shim}'")
+
+
 def main() -> int:
+    check_shims()
     tests = sorted(
         t
         for pattern in ("test/**/test_*.mojo", "packages/*/test/test_*.mojo")

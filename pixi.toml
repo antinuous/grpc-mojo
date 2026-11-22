@@ -52,3 +52,17 @@ version = "0.2.8"
 
 [package.build]
 backend = { name = "pixi-build-rattler-build", version = "0.*" }
+
+# The libraries load their shims only from these variables or CONDA_PREFIX,
+# so every task here names the shims prepare-tls and prepare-stop write.
+[target.osx-arm64.activation.env]
+GRPC_STOP_SHIM = "$PIXI_PROJECT_ROOT/build/libgrpcstop.dylib"
+MOJO_TLS_SHIM = "$PIXI_PROJECT_ROOT/build/libmojotls.dylib"
+
+[target.linux-64.activation.env]
+GRPC_STOP_SHIM = "$PIXI_PROJECT_ROOT/build/libgrpcstop.so"
+MOJO_TLS_SHIM = "$PIXI_PROJECT_ROOT/build/libmojotls.so"
+
+[target.linux-aarch64.activation.env]
+GRPC_STOP_SHIM = "$PIXI_PROJECT_ROOT/build/libgrpcstop.so"
+MOJO_TLS_SHIM = "$PIXI_PROJECT_ROOT/build/libmojotls.so"
