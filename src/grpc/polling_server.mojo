@@ -19,8 +19,9 @@ connections while they run — the same contract as unary handlers and as
 the blocking `Server`. Long-lived streams belong on process-per-connection
 `Server` until Mojo ships threads or async. `request_stop()` and optional
 SIGTERM/SIGINT handlers send GOAWAY and drain live streams on this thread.
-TLS handshakes advance through the same Poller and strictly require the
-`h2` ALPN token. Unix sockets are plaintext only. Optional HTTP/2
+TLS handshakes advance through the same Poller. A client that offers ALPN
+must select `h2`; a client that offers no ALPN is accepted as HTTP/2, since
+gRPC clients built on Python `ssl` (grpclib) send no ALPN extension. Unix sockets are plaintext only. Optional HTTP/2
 keepalive PINGs are driven from the Poller loop when
 `keepalive_interval_ns` is positive.
 
@@ -370,6 +371,12 @@ struct _PollingRoute(Copyable, Movable):
     var handler: UnaryBytesHandler
 
 
+def accepts_alpn(selected: String) -> Bool:
+    """Accepts `h2` or no ALPN; the server context offers only `h2`, so an
+    empty selection means the client sent no ALPN extension."""
+    return selected == H2_ALPN or selected.byte_length() == 0
+
+
 @fieldwise_init
 struct _PollingHandshake(Movable):
     """One bounded readiness-driven TLS server handshake."""
@@ -384,7 +391,7 @@ struct _PollingHandshake(Movable):
         deinit self, config: PollingServerConfig
     ) raises -> _PollingConnection:
         var tls = self.tls^.finish()
-        if tls.negotiated_alpn() != H2_ALPN:
+        if not accepts_alpn(tls.negotiated_alpn()):
             tls.close()
             raise Error("grpc: TLS peer did not negotiate h2 ALPN")
         var peer_certificate = tls.peer_certificate()
@@ -606,7 +613,7 @@ struct PollingServer(Movable):
     be short. Streaming handlers temporarily switch the connection to
     blocking I/O and stall other connections until they return. The default
     constructor serves h2c; `tls` performs non-blocking TLS handshakes and
-    requires `h2` ALPN; `unix` binds a Unix domain socket. Set
+    accepts `h2` or no ALPN; `unix` binds a Unix domain socket. Set
     `config.keepalive_interval_ns` to send HTTP/2 keepalive PINGs from the
     event loop; the default of 0 sends none. `request_stop()` or a stop
     signal sends GOAWAY and returns after live streams drain.
@@ -684,7 +691,7 @@ struct PollingServer(Movable):
         client_ca_file: StringSpan = "",
         require_client_cert: Bool = False,
     ) raises -> PollingServer:
-        """Constructs a TLS polling server that accepts only `h2` ALPN.
+        """Constructs a TLS polling server that accepts `h2` or no ALPN.
 
         The server uses one certificate chain for every connection. It can
         require a client certificate before HTTP/2 request dispatch.
