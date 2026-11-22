@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Build grpc-mojo and test it in an isolated package environment."""
 
+import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tempfile
@@ -16,12 +18,7 @@ RATTLER_BUILD = "rattler-build>=0.30,<0.31"
 RATTLER_INDEX = "rattler-index>=0.30,<0.31"
 BUILD_TIMEOUT_SECONDS = 30 * 60
 TEST_TIMEOUT_SECONDS = 5 * 60
-DEPENDENCIES = [
-    ("mojo-net", "0.2.8", PACKAGES / "mojo-net"),
-    ("protomojo", "0.4.4", PACKAGES / "protomojo"),
-    ("mojo-tls", "0.3.4", PACKAGES / "mojo-tls"),
-    ("mojo-http2", "0.2.10", PACKAGES / "mojo-http2"),
-]
+DEPENDENCIES = ["mojo-net", "protomojo", "mojo-tls", "mojo-http2"]
 
 
 def run(
@@ -51,18 +48,20 @@ def git_output(command: list[str], cwd: Path) -> str:
     return result.stdout.strip()
 
 
-def verify_dependency(name: str, version: str, source: Path) -> None:
-    tag = f"v{version}"
-    try:
-        expected = git_output(["rev-parse", f"{tag}^{{commit}}"], source)
-        actual = git_output(["rev-parse", "HEAD"], source)
-    except subprocess.CalledProcessError as error:
+def recipe_version(root: Path) -> str:
+    """The version a package's own recipe builds."""
+    recipe = root / "recipe" / "recipe.yaml"
+    match = re.search(r'^  version: "([^"]+)"$', recipe.read_text(), re.M)
+    if match is None:
+        raise RuntimeError(f"{recipe} names no version")
+    return match.group(1)
+
+
+def verify_dependency(name: str, commit: str, source: Path) -> None:
+    actual = git_output(["rev-parse", "HEAD"], source)
+    if actual != commit:
         raise RuntimeError(
-            f"dependency '{name}' is missing the {tag} tag"
-        ) from error
-    if actual != expected:
-        raise RuntimeError(
-            f"dependency '{name}' HEAD does not match the {tag} tag"
+            f"dependency '{name}' HEAD {actual} is not the pinned {commit}"
         )
     if git_output(["status", "--porcelain"], source):
         raise RuntimeError(f"dependency '{name}' checkout is not clean")
@@ -134,14 +133,16 @@ def build_package(
 
 
 def main() -> None:
-    for name, version, source in DEPENDENCIES:
+    pins = json.loads((ROOT / "deps.json").read_text())["deps"]
+    for name in DEPENDENCIES:
+        source = PACKAGES / name
         if not source.is_dir():
             raise RuntimeError(
                 f"dependency '{name}' not found; run python3 tools/fetch_deps.py"
             )
         if not (source / "recipe" / "recipe.yaml").is_file():
             raise RuntimeError(f"dependency '{name}' has no package recipe")
-        verify_dependency(name, version, source)
+        verify_dependency(name, pins[name]["commit"], source)
 
     with tempfile.TemporaryDirectory(prefix="grpc-mojo-package-") as temp:
         work = Path(temp)
@@ -151,15 +152,16 @@ def main() -> None:
         (channel / "noarch").mkdir()
         index_channel(channel)
 
-        for name, version, source in DEPENDENCIES:
+        for name in DEPENDENCIES:
+            source = PACKAGES / name
             artifact = build_package(
-                name, version, source, work / name, channel
+                name, recipe_version(source), source, work / name, channel
             )
             shutil.copy2(artifact, channel_subdir / artifact.name)
             index_channel(channel)
 
         artifact = build_package(
-            "grpc-mojo", "0.2.8", ROOT, work / "grpc-mojo", channel
+            "grpc-mojo", recipe_version(ROOT), ROOT, work / "grpc-mojo", channel
         )
         test_command = [
             "pixi",
