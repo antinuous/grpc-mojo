@@ -8,6 +8,8 @@
 gRPC for [Mojo](https://www.modular.com/mojo) 1.0: unary and streaming RPCs over
 h2c, TLS, and Unix sockets.
 
+This mirror locks the Mojo build that antinuous/research pins, and a research toolchain bump moves this lock in the same batch.
+
 **[Getting started](https://nsalerni.github.io/grpc-mojo/)** ·
 **[Compliance report](https://nsalerni.github.io/grpc-mojo/docs/COMPLIANCE.html)**
 ([Markdown](docs/COMPLIANCE.md)) is regenerated on every CI run.
