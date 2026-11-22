@@ -21,7 +21,9 @@ unary call on the same or another connection.
 Flow control follows HTTP/2: a call's framed output waits in a bounded
 backlog until the peer grants stream and connection credit, and the service
 is not pumped while the backlog is full. Socket output, the HTTP/2 queue, and
-each call backlog have named bounds in `MuxServerConfig`.
+each call backlog have named bounds in `MuxServerConfig`. A call stalled only
+on full socket output is driven again as soon as that output drains, since
+the peer may have no further frames to send that would wake the poller.
 
 TLS accepts `h2` or no ALPN. Plaintext h2c is used when no certificate is
 configured.
@@ -46,6 +48,7 @@ comptime _ERR_NO_ERROR: UInt32 = 0
 comptime _NS_PER_MS: Int64 = 1_000_000
 comptime _SIGPIPE: c_int = 13
 comptime _SIG_IGN: Int = 1
+comptime _REDRIVE_ROUNDS_MAX = 64
 
 
 struct MuxServerConfig(Copyable, Movable):
@@ -588,6 +591,19 @@ struct MuxServer[S: MuxService](Movable):
                     self._read(connection)
                 self._drive(connection, now)
                 self._write(connection)
+                var rounds = 0
+                while (
+                    len(connection.output) == 0
+                    and rounds < _REDRIVE_ROUNDS_MAX
+                    and not connection.peer_eof
+                ):
+                    self._drive(connection, now)
+                    if len(connection.output) == 0:
+                        break
+                    self._write(connection)
+                    rounds += 1
+                if rounds == _REDRIVE_ROUNDS_MAX:
+                    connection.resume_read = True
             except:
                 connection.peer_eof = True
                 connection.output = _Outbox()
