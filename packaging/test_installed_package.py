@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGES = ROOT / "packages"
-CHANNELS = ["https://conda.modular.com/max", "conda-forge"]
+CHANNELS = ["https://conda.modular.com/max-nightly", "conda-forge"]
 RATTLER_BUILD = "rattler-build>=0.30,<0.31"
 RATTLER_INDEX = "rattler-index>=0.30,<0.31"
 BUILD_TIMEOUT_SECONDS = 30 * 60
