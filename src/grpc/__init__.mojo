@@ -95,6 +95,12 @@ from .metadata import (
     is_binary_key,
     is_valid_metadata_key,
 )
+from .mux_server import (
+    MuxOutput,
+    MuxServer,
+    MuxServerConfig,
+    MuxService,
+)
 from .polling_server import PollingServer, PollingServerConfig
 from .reflection import (
     REFLECTION_V1_PATH,
