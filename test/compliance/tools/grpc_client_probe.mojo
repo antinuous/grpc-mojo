@@ -120,7 +120,7 @@ def main() raises:
 
     elif mode == "echo":
         var n = Int(args[3])
-        var payload = String(capacity=n)
+        var payload = String(capacity_bytes=n)
         for i in range(n):
             payload += "abcdefghij"[byte = i % 10 : i % 10 + 1]
         var r = unary_text(
